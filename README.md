@@ -1,8 +1,8 @@
-# Fireball TypeScript Client
+# Fireball TypeScript SDK
 
-TypeScript client for the [Fireball](https://cloud.fireballserver.com) gaming platform, ported from the Unity SDK (`Assets/Fireball/`).
+TypeScript SDK for the [Fireball](https://cloud.fireballserver.com) gaming platform.
 
-The SDK is split into two layers: a **reusable Fireball transport layer** and **game-specific implementations**. Any game (Chicken, Mines, Crash, etc.) can be built on top of `FireballClient` without touching the SDK.
+The SDK is split into two layers: a **reusable Fireball transport layer** and **game-specific implementations**. Any game (Slots, Mines, Crash, etc.) can be built on top of `FireballClient` without touching the core SDK.
 
 ## How it works
 
@@ -18,7 +18,6 @@ Every request carries a unique `ActionId`. The WebSocket listener matches incomi
 ## Project structure
 
 ```
-js-client/
 ├── src/
 │   ├── fireball/               Reusable SDK — game-agnostic transport layer
 │   │   ├── constants.ts        Server URLs and SignalR hub method names
@@ -29,14 +28,15 @@ js-client/
 │   │   ├── FireballClient.ts   Core client: connect / authorize / getBalance / send<T>
 │   │   └── index.ts            SDK barrel export
 │   │
-│   └── chicken/                Chicken game implementation
-│       ├── types.ts            ChickenMode, ChickenGameState, MoveResult, etc.
-│       ├── serverTypes.ts      Internal Chicken-specific server response shapes
-│       ├── ChickenGame.ts      startRound / move / cashOut (tracks step + round state)
-│       └── index.ts            Chicken barrel export
+│   └── slots/                  Slots game implementation
+│       ├── types.ts            SpinResult
+│       ├── serverTypes.ts      Internal Slots-specific server response shapes
+│       ├── SlotsGame.ts        spin()
+│       └── index.ts            Slots barrel export
 │
+├── Samples/
+│   └── SlotsSample/index.ts    Runnable usage example
 ├── index.ts                    Root barrel — exports SDK + all games
-├── example.ts                  Runnable usage example
 ├── package.json
 ├── tsconfig.json
 └── README.md
@@ -47,7 +47,6 @@ js-client/
 ## Setup
 
 ```bash
-cd js-client
 npm install
 ```
 
@@ -55,22 +54,11 @@ npm install
 
 ## Running the example
 
-Fill in your credentials in `example.ts`:
+Copy `.env.example` to `.env` and fill in your credentials:
 
-```ts
-const client = new FireballClient({
-  operatorId:       "your-operator-id",
-  gameId:           "your-game-id",
-  operatorPlayerId: "player-123",
-  token:            "your-player-auth-token",
-  environment:      "development",
-  gameMode:         "fun",
-  currency:         "USD",
-});
+```bash
+cp .env.example .env
 ```
-
-> The `operatorId` and `gameId` can be found in the Unity project at
-> `Assets/Scenes/ChickenGameFireballSettings.asset`.
 
 Then run:
 
@@ -85,7 +73,7 @@ npm run example
 ### 1. Connect and authorize
 
 ```ts
-import { FireballClient, ChickenGame } from "./index";
+import { FireballClient } from "@jjavier/fireball-sdk";
 
 const client = new FireballClient({
   operatorId:       "your-operator-id",
@@ -109,25 +97,18 @@ const { balance, currency } = await client.getBalance();
 console.log(`Balance: ${balance / 100} ${currency}`);
 ```
 
-### 3. Play a round
+### 3. Spin
 
 ```ts
-const game = new ChickenGame(client);
+import { SlotsGame } from "@jjavier/fireball-sdk/slots";
 
-// Start a $5 round on easy mode
-const start = await game.startRound(5, "easy");
+const game = new SlotsGame(client);
+const result = await game.spin(5); // $5 bet
 
-// Make moves — step is tracked internally, no need to pass it
-const move = await game.move();
-
-if (move.popped) {
-  console.log("Popped! Round lost.");
+if (result.isWon) {
+  console.log(`Won: ${result.winAmount / 100} ${result.currency}`);
 } else {
-  console.log(`Safe — multiplier: ${move.currentMultiplier}x`);
-
-  // Cash out at the current multiplier
-  const cashout = await game.cashOut();
-  console.log(`Won: ${cashout.winAmount / 100} ${currency}`);
+  console.log("No win.");
 }
 
 await client.disconnect();
@@ -138,10 +119,10 @@ await client.disconnect();
 All methods reject with a `FireballError` on failure:
 
 ```ts
-import type { FireballError } from "./index";
+import type { FireballError } from "@jjavier/fireball-sdk";
 
 try {
-  await game.startRound(5, "easy");
+  await game.spin(5);
 } catch (err) {
   const e = err as FireballError;
   console.error(`[${e.name}] ${e.reason} (code: ${e.code})`);
@@ -194,30 +175,28 @@ export { MinesGame } from "./src/mines/MinesGame";
 | `isConnected` | `true` if the WebSocket is currently connected. |
 | `session` | Read-only snapshot of the current session state. |
 
-### `ChickenGame`
+### `SlotsGame`
 
-| Method / Property | Description |
+| Method | Description |
 |---|---|
-| `startRound(betAmount, mode, cheat?)` | Starts a new round. `betAmount` is in whole units (e.g. `5` for $5). |
-| `move()` | Makes the next move. Step is tracked internally. |
-| `cashOut()` | Cashes out the active round at the current multiplier. |
-| `inRound` | `true` while a round is active. |
-| `currentStep` | The current step number tracked client-side. |
+| `spin(betAmount)` | Sends a spin request. `betAmount` is in whole units (e.g. `5` for $5). Returns `SpinResult`. |
 
-### Game modes
+### `SpinResult`
 
-| Value | Description |
-|---|---|
-| `"easy"` | Low pop chance per step |
-| `"medium"` | Medium pop chance per step |
-| `"hard"` | High pop chance per step |
-| `"daredevil"` | Maximum pop chance per step |
+| Field | Type | Description |
+|---|---|---|
+| `symbols` | `Record<number, number>` | Maps slot position (0-based) to symbol index |
+| `winAmount` | `number` | Amount won in smallest currency unit |
+| `balance` | `number` | Player balance after spin |
+| `isWon` | `boolean` | Whether the spin was a win |
+| `currency` | `string` | Currency code |
+| `gameType` | `string` | Game type identifier from server |
 
 ### Currency note
 
-All money values returned by the server (`balance`, `winAmount`, `betAmount`) are in the **smallest currency unit** (cents for USD). Divide by 100 to display as dollars.
+All money values returned by the server (`balance`, `winAmount`) are in the **smallest currency unit** (cents for USD). Divide by 100 to display as dollars.
 
-The `betAmount` passed to `startRound()` is in **whole units** — the client multiplies by `session.multiplier` (set from the auth response) automatically before sending to the server.
+The `betAmount` passed to `spin()` is in **whole units** — the client multiplies by `session.multiplier` (set from the auth response) automatically before sending to the server.
 
 ---
 
