@@ -1,0 +1,38 @@
+{
+  "name": "@jjavier/fireball-sdk",
+  "version": "1.0.0",
+  "description": "TypeScript SDK for the Fireball gaming platform",
+  "keywords": ["fireball", "gaming", "signalr", "websocket", "sdk"],
+  "license": "MIT",
+  "main": "./dist/fireball/index.js",
+  "types": "./dist/fireball/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/fireball/index.js",
+      "types": "./dist/fireball/index.d.ts"
+    },
+    "./slots": {
+      "require": "./dist/slots/index.js",
+      "types": "./dist/slots/index.d.ts"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "dev": "tsc -p tsconfig.build.json --watch",
+    "example": "tsx Samples/SlotsSample/index.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@microsoft/signalr": "^8.0.7"
+  },
+  "devDependencies": {
+    "@types/node": "^25.3.0",
+    "dotenv": "^17.3.1",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}
